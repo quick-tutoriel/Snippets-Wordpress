@@ -1,0 +1,21 @@
+function qt_serve_custom_410() {
+    // Liste des URLs à marquer comme "supprimées"
+    $urls_410 = [
+        '/mon-article-a-supprmer/'
+    ];
+
+    // Récupération de l'URL actuelle
+    $current_url = esc_url_raw($_SERVER['REQUEST_URI']);
+
+    foreach ($urls_410 as $url) {
+        if ($current_url === $url) {
+            // Envoie le code HTTP 410
+            status_header(410);
+
+            // Appelle le bon fichier 410.php dans le thème actif
+            include get_stylesheet_directory() . '/410.php';
+            exit;
+        }
+    }
+}
+add_action('template_redirect', 'qt_serve_custom_410');
