@@ -1,0 +1,59 @@
+add_action('wp_login_failed', 'limiter_connexions_ntfy');
+
+function limiter_connexions_ntfy($username) {
+    $ip              = $_SERVER['REMOTE_ADDR'];
+    $tentatives_max  = 3;
+    $duree_blocage   = 30 * MINUTE_IN_SECONDS;
+    $cle_transient   = 'tentatives_connexion_' . $ip;
+    $tentatives      = get_transient($cle_transient);
+
+    if ( ! is_array($tentatives) ) {
+        $tentatives = [
+            'compteur'  => 1,
+            'timestamp' => time() + $duree_blocage,
+            'username'  => $username,
+        ];
+    } else {
+        $tentatives['compteur']++;
+    }
+
+    set_transient($cle_transient, $tentatives, $duree_blocage);
+
+    if ( $tentatives['compteur'] === $tentatives_max ) {
+        envoyer_notification_ntfy($username, $ip);
+    }
+}
+
+function envoyer_notification_ntfy($username, $ip) {
+    $topic_url = 'https://ntfy.guillaumereynaud.fr/Alertes-WP'; // Remplace par ton topic ntfy
+    $message   = "🔐 Tentatives de connexion bloquées\n"
+               . "👤 Utilisateur : $username\n"
+               . "📍 IP : $ip\n"
+               . "🌐 Site : " . get_bloginfo('name') . "\n"
+               . "⏰ Date : " . date('d/m/Y H:i:s');
+
+    wp_remote_post($topic_url, [
+        'method'  => 'POST',
+        'headers' => [
+            'Title' => '🚨 Blocage connexion WP',
+        ],
+        'body'    => $message,
+    ]);
+}
+
+add_filter('authenticate', 'verifier_blocage_ip', 30, 3);
+
+function verifier_blocage_ip($user, $username, $password) {
+    $ip            = $_SERVER['REMOTE_ADDR'];
+    $cle_transient = 'tentatives_connexion_' . $ip;
+    $tentatives    = get_transient($cle_transient);
+
+    if ( is_array($tentatives) && $tentatives['compteur'] >= 5 ) {
+        return new WP_Error(
+            'too_many_attempts',
+            __('Trop de tentatives. Réessayez plus tard.')
+        );
+    }
+
+    return $user;
+}
