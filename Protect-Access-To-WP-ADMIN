@@ -1,0 +1,68 @@
+// 1. Ajouter une règle de réécriture pour /mydashboard
+add_action('init', function () {
+    add_rewrite_rule('^mydashboard/?$', 'index.php?mydashboard=1', 'top');
+});
+
+// 2. Ajouter la variable query personnalisée
+add_filter('query_vars', function ($vars) {
+    $vars[] = 'mydashboard';
+    return $vars;
+});
+
+// 3. Gérer la requête /mydashboard
+add_action('template_redirect', function () {
+    if (get_query_var('mydashboard')) {
+        if (is_user_logged_in()) {
+            wp_redirect(admin_url());
+        } else {
+            wp_redirect(wp_login_url(admin_url()));
+        }
+        exit;
+    }
+});
+
+// 4. Bloquer l’accès à /wp-admin si non connecté
+add_action('init', function () {
+    $uri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+    if (
+        str_starts_with($uri, 'wp-admin') &&
+        !is_user_logged_in()
+    ) {
+        wp_die('Accès à l’administration interdit.', 'Erreur 403', ['response' => 403]);
+    }
+});
+
+// 5. Bloquer l’accès direct à wp-login.php sauf dans certains cas (connexion, redirection, déconnexion)
+add_action('init', function () {
+    $uri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+    if (
+        str_contains($uri, 'wp-login.php') &&
+        !isset($_GET['redirect_to']) &&
+        !isset($_POST['log']) &&
+        !isset($_GET['action']) &&
+        !isset($_GET['loggedout']) // Autoriser déconnexion
+    ) {
+        wp_die('Accès refusé.', 'Erreur 403', ['response' => 403]);
+    }
+});
+
+// 6. Bloquer wp-login.php sans contexte sauf si déconnexion
+add_action('login_init', function () {
+    if (
+        !isset($_GET['redirect_to']) &&
+        !isset($_GET['action']) &&
+        !isset($_POST['log']) &&
+        !isset($_GET['loggedout']) // Autoriser déconnexion
+    ) {
+        wp_die('Accès interdit à la page de connexion.', 'Erreur 403', ['response' => 403]);
+    }
+});
+
+// 7. Désactiver la redirection canonique WordPress sur /mydashboard
+add_filter('redirect_canonical', function ($redirect_url, $requested_url) {
+    $uri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+    if ($uri === 'mydashboard') {
+        return false;
+    }
+    return $redirect_url;
+}, 10, 2);
